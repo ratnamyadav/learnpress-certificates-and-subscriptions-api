@@ -21,51 +21,56 @@ A WordPress plugin that extends LearnPress with REST API endpoints for certifica
 
 1. Upload the `learnpress-certificates-extension` folder to the `/wp-content/plugins/` directory
 2. Activate the plugin through the 'Plugins' menu in WordPress
-3. Ensure LearnPress is installed and activated
-4. Go to LearnPress > Certificate Settings to configure the plugin
+3. Ensure LearnPress is installed and activated (version 4.0.0 or higher)
+4. The REST API endpoints will be immediately available at `/wp-json/learnpress/v1/`
 
 ## Configuration
 
-### General Settings
+This plugin requires no configuration. Once activated, the REST API endpoints are immediately available.
 
-Navigate to **LearnPress > Certificate Settings** to configure:
+### Requirements
 
-- **Certificate Width**: Set the width of certificate images (default: 1200px)
-- **Certificate Height**: Set the height of certificate images (default: 800px)
-- **Auto Generate**: Enable automatic certificate generation on course completion
+- **LearnPress**: Must be installed and activated (version 4.0.0 or higher)
+- **Paid Member Subscriptions**: Optional, but required for subscription status endpoints to work
 
-### Course Settings
+### Plugin Activation
 
-For each course, you can enable or disable certificate generation:
+1. Ensure LearnPress is installed and activated
+2. Activate this plugin
+3. REST API endpoints will be available at `/wp-json/learnpress/v1/`
 
-1. Edit a course in WordPress
-2. Look for the "Certificate Settings" meta box in the sidebar
-3. Check "Enable certificate for this course" to enable certificates for that course
+If LearnPress is not active, an admin notice will be displayed. If Paid Member Subscriptions is not active, a warning notice will be displayed (subscription endpoints will return 503 errors).
 
 ## Usage
 
-### For Students
+This plugin provides REST API endpoints for accessing LearnPress certificates and subscription status. It does not provide a frontend interface or admin pages.
 
-1. Complete a course that has certificates enabled
-2. Receive an email notification with your certificate
-3. View your certificate by clicking "View Certificate" on the course page
-4. Access all your certificates from your LearnPress profile under the "Certificates" tab
-5. Download or print your certificates
+### For Developers
 
-### For Administrators
+Use the REST API endpoints to:
+- Retrieve user certificates programmatically
+- Verify certificates by code (public verification)
+- Check user subscription status
+- Get subscription plan information
 
-1. View all certificates: **LearnPress > Certificates**
-2. Configure settings: **LearnPress > Certificate Settings**
-3. Enable/disable certificates per course: Edit course > Certificate Settings meta box
+See the [REST API](#rest-api) section below for complete endpoint documentation and examples.
+
+### For End Users
+
+End users can access their certificates through:
+- LearnPress frontend (if LearnPress provides certificate viewing functionality)
+- Third-party applications that consume the REST API endpoints
+- Public certificate verification using the certificate code
 
 ## Certificate Information
 
-Each certificate includes:
-- Student name
-- Course title
-- Issue date
-- Unique certificate code for verification
-- Professional design with decorative borders
+Certificates accessed via the API include:
+- Certificate ID
+- Certificate verification code
+- User information (ID, name, email - email hidden in public verification)
+- Course information (ID, title, slug, URL)
+- Certificate file URL
+- Status
 
 ## File Structure
 
@@ -73,30 +78,25 @@ Each certificate includes:
 learnpress-certificates-extension/
 ├── learnpress-certificates-extension.php  # Main plugin file
 ├── includes/
-│   ├── class-lpce-admin.php              # Admin functionality
-│   ├── class-lpce-frontend.php           # Frontend functionality
-│   ├── class-lpce-certificate-generator.php  # Certificate generation
-│   └── class-lpce-database.php           # Database operations
-├── assets/
-│   ├── css/
-│   │   ├── admin.css                     # Admin styles
-│   │   └── frontend.css                  # Frontend styles
-│   └── js/
-│       ├── admin.js                      # Admin scripts
-│       └── frontend.js                   # Frontend scripts
+│   ├── class-lpce-database.php           # Database operations
+│   └── class-lpce-rest-api.php           # REST API endpoints
+├── .gitignore                            # Git ignore rules
 └── README.md                             # This file
 ```
 
 ## Database
 
-The plugin creates a custom table `wp_lpce_certificates` to store certificate information:
-- Certificate ID
-- User ID
-- Course ID
-- Certificate Code
-- Issue Date
-- File Path
-- Status
+The plugin uses the WordPress `wp_options` table to store certificate information. Certificates are stored as options with the prefix `user_cert_` followed by the certificate code/hash.
+
+The certificate data structure includes:
+- Certificate ID (`cert_id`)
+- User ID (`user_id`)
+- Course ID (`course_id`)
+- Certificate Code (stored as part of the option name)
+- File URL (generated from upload directory)
+- Status (defaults to 'active')
+
+Certificate files are stored in the WordPress uploads directory under `learn-press-cert/` with the filename format: `{certificate_code}.png`
 
 ## REST API
 
@@ -580,43 +580,57 @@ else:
 
 ## Hooks & Filters
 
-### Actions
+This plugin primarily provides REST API endpoints. The plugin uses WordPress core hooks internally:
 
-- `learn_press_user_course_finished` - Triggered when a user completes a course
-- `lpce_certificate_generated` - Triggered after a certificate is generated
+- `rest_api_init` - Registers REST API routes
+- `plugins_loaded` - Loads plugin textdomain
+- `init` - Initializes plugin components
+- `admin_notices` - Displays admin notices for missing dependencies
 
-### Filters
+Currently, there are no public hooks or filters exposed for developers. If you need to extend functionality, you can:
 
-- `lpce_certificate_options` - Filter certificate generation options
-- `lpce_certificate_email_subject` - Filter certificate email subject
-- `lpce_certificate_email_message` - Filter certificate email message
+1. Extend the `LPCE_REST_API` class to add custom endpoints
+2. Extend the `LPCE_Database` class to add custom database queries
+3. Use WordPress REST API filters to modify responses
 
 ## Customization
 
-### Custom Certificate Templates
+### Extending REST API Responses
 
-You can customize the certificate appearance by modifying the `create_certificate_image()` method in `class-lpce-certificate-generator.php`.
+You can customize API responses by using WordPress filters or by extending the `LPCE_REST_API` class. The response formatting is handled in the `format_certificate_response()` method in `includes/class-lpce-rest-api.php`.
 
-### Styling
+### Database Operations
 
-Customize the appearance by:
-- Editing `assets/css/frontend.css` for frontend styles
-- Editing `assets/css/admin.css` for admin styles
+Database operations are handled by the `LPCE_Database` class in `includes/class-lpce-database.php`. You can extend this class to add custom database queries or modify existing ones.
 
 ## Troubleshooting
 
-### Certificates Not Generating
+### API Endpoints Not Available
 
-1. Ensure LearnPress is installed and activated
-2. Check that GD Library is enabled in PHP
-3. Verify that certificates are enabled for the specific course
-4. Check WordPress uploads directory permissions
+1. Ensure LearnPress is installed and activated (version 4.0.0 or higher)
+2. Verify the plugin is activated in WordPress
+3. Check that permalinks are not set to "Plain" (Settings > Permalinks)
+4. Test the endpoint: `https://yoursite.com/wp-json/learnpress/v1/certificates/code/TEST` (should return an error, not 404)
 
-### Certificate Images Not Displaying
+### Authentication Issues
 
-1. Check file permissions on the uploads directory
-2. Verify the certificate file was created in `wp-content/uploads/lpce-certificates/`
-3. Check for PHP errors in the error log
+1. Verify you're using the correct authentication method (Application Passwords recommended)
+2. Check that the user account has proper permissions
+3. Ensure the `Authorization` header is correctly formatted
+4. For cookie authentication, verify you're logged in to WordPress
+
+### Subscription Endpoints Returning 503
+
+1. Ensure Paid Member Subscriptions plugin is installed and activated
+2. Check that the plugin is the correct version compatible with your WordPress installation
+3. Verify PMS functions are available by checking for `pms_get_member_subscriptions` function
+
+### Certificate Not Found
+
+1. Verify the certificate code is correct (case-sensitive)
+2. Check that the certificate exists in the LearnPress system
+3. Verify the certificate data is stored in the WordPress options table with the `user_cert_` prefix
+4. Check WordPress error logs for database query errors
 
 ## Support
 
